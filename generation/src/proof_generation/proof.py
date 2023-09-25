@@ -16,6 +16,7 @@ from proof_generation.pattern import (
     Implication,
     MetaVar,
     Mu,
+    Notation,
     Pattern,
     SSubst,
     SVar,
@@ -90,6 +91,9 @@ class BasicInterpreter:
     def mu(self, var: int, subpattern: Pattern) -> Pattern:
         return Mu(SVar(var), subpattern)
 
+    def notation(self, label: str, pattern: Pattern) -> Pattern:
+        return Notation(label, pattern)
+
     def pattern(self, p: Pattern) -> Pattern:
         match p:
             case EVar(name):
@@ -115,8 +119,13 @@ class BasicInterpreter:
                 self.patterns(app_ctx_holes)
 
                 return self.metavar(name, e_fresh, s_fresh, positive, negative, app_ctx_holes)
+            case Notation(label, pattern):
+                return self.construct_notation(label, pattern)
 
         raise NotImplementedError
+
+    def construct_notation(self, label: str, pattern: Pattern) -> Pattern:
+        return self.notation(label, self.pattern(pattern))
 
     def patterns(self, ps: tuple[Pattern, ...]) -> tuple[Pattern, ...]:
         return tuple(self.pattern(p) for p in ps)
@@ -190,6 +199,7 @@ class StatefulInterpreter(BasicInterpreter):
     claims: list[Claim]
     stack: list[Pattern | Proved]
     memory: list[Pattern | Proved]
+    nlocs: dict[str, int] = {}
 
     def __init__(
         self, phase: ExecutionPhase, claims: list[Claim] | None = None, axioms: list[Pattern] | None = None
@@ -279,6 +289,17 @@ class StatefulInterpreter(BasicInterpreter):
         assert expected_plug == plug
         ret = super().ssubst(svar_id, pattern, plug)
         self.stack.append(ret)
+        return ret
+
+    def construct_notation(self, label: str, pattern: Pattern) -> Pattern:
+        if label in self.nlocs:
+            ret = self.memory[self.nlocs[label]]
+            assert isinstance(ret, Pattern)
+            self.load(label, ret)
+        else:
+            ret = super().construct_notation(label, pattern)
+            self.nlocs[label] = len(self.memory)
+            self.save(label, ret)
         return ret
 
     def prop1(self) -> Proved:
