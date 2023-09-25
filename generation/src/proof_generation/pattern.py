@@ -209,3 +209,21 @@ class SSubst(Pattern):
 
     def __str__(self) -> str:
         return f'({str(self.pattern)}[{str(self.plug)}/{str(self.var)}])'
+
+
+@dataclass(frozen=True)
+class Notation(Pattern):
+    label: str
+    definition: Pattern
+
+    def instantiate(self, delta: dict[int, Pattern]) -> Pattern:
+        return Notation(self.label, self.definition.instantiate(delta))
+
+    def apply_esubst(self, evar_id: int, plug: Pattern) -> Pattern:
+        return Notation(self.label, self.definition.apply_esubst(evar_id, plug))
+
+    def apply_ssubst(self, svar_id: int, plug: Pattern) -> Pattern:
+        return Notation(self.label, self.definition.apply_ssubst(svar_id, plug))
+
+    def __str__(self) -> str:
+        return f'{str(self.label)} := {str(self.definition)}'
