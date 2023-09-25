@@ -518,7 +518,7 @@ class PrettyPrintingInterpreter(StatefulInterpreter):
         self._notation = notation
 
     @property
-    def notation(self) -> dict[Pattern, str]:
+    def pp_notation(self) -> dict[Pattern, str]:
         return {v: k for k, v in self._notation.items()}
 
     @staticmethod
@@ -664,8 +664,8 @@ class PrettyPrintingInterpreter(StatefulInterpreter):
         self.out.write('Publish')
 
     def pretty_print_pattern(self, p: Pattern) -> str:
-        if p in self.notation:
-            return self.notation[p]
+        if p in self.pp_notation:
+            return self.pp_notation[p]
 
         # TODO: Figure out how to avoid this "double" definition of pretty printing for some cases
         # like implication while keeping notations
