@@ -111,12 +111,12 @@ def exec_proof(converter: MetamathConverter, target: str, proofexp: p.ProofExp, 
                 # AFTER the instantiations for our lemma (as floatings go first)
                 # We need to pop the antecedents to instantiate our axiom first
                 for _ in axiom.antecedents:
-                    if phase == 0:
+                    if phase == 0 or len(axiom.antecedents) < 5:
                         saved_antecedents.append((str(stack()[-1]), stack()[-1]))
                         interpreter().save(str(stack()[-1]), stack()[-1])
                     interpreter().pop(stack()[-1])
 
-                if phase == 0:
+                if phase == 0 or len(axiom.antecedents) < 5:
                     proofexp.load_axiom(convert_to_implication(axiom.antecedents, axiom.pattern))
                 else:
                     delta = get_delta(converter.get_metavars_in_order(lemma_label), 0)
@@ -268,6 +268,8 @@ def main() -> None:
     for axiom_name in converter.exported_axioms:
         axiom = converter.get_axiom_by_name(axiom_name)
         if isinstance(axiom, AxiomWithAntecedents):
+            if len(axiom.antecedents) < 5:
+                extracted_axioms2.append(convert_to_implication(axiom.antecedents, axiom.pattern))
             continue
         extracted_axioms2.append(axiom.pattern)
 
