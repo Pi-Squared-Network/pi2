@@ -11,19 +11,19 @@ from mm_transfer.converter.representation import AxiomWithAntecedents
 from mm_transfer.metamath.parser import load_database
 
 
-def exec_proof(converter: MetamathConverter, target: str, proofexp: p.ProofExp) -> None:
+def exec_proof(converter: MetamathConverter, target: str, proofexp: p.ProofExp, phase: int = 0) -> [nf.Pattern]:
     assert isinstance(proofexp.interpreter, p.StatefulInterpreter)
     interpreter = lambda: proofexp.interpreter
     stack = lambda: proofexp.interpreter.stack
 
-    def get_delta(metavars: tuple[str, ...]) -> dict[int, nf.Pattern]:
+    def get_delta(metavars: tuple[str, ...], offset: int = 1) -> dict[int, nf.Pattern]:
         delta: dict[int, nf.Pattern] = {}
 
         nargs = len(metavars)
         i = 0
         for metavar_label in metavars:
             metavar = converter.resolve_metavar(metavar_label)
-            pat = stack()[-(nargs + 1) + i]
+            pat = stack()[-(nargs + offset) + i]
             assert isinstance(pat, nf.Pattern)
             delta[metavar.name] = pat
             i += 1
@@ -39,6 +39,7 @@ def exec_proof(converter: MetamathConverter, target: str, proofexp: p.ProofExp) 
 
     # We do not support ambiguities right now
     exported_proof = converter.get_lemma_by_name(target).proof
+    exported_conclusions: [nf.Pattern] = []
 
     # lemma |-> memory id in MM
     mm_memory: list[nf.Pattern | p.Proved] = []
@@ -110,13 +111,27 @@ def exec_proof(converter: MetamathConverter, target: str, proofexp: p.ProofExp) 
                 # AFTER the instantiations for our lemma (as floatings go first)
                 # We need to pop the antecedents to instantiate our axiom first
                 for _ in axiom.antecedents:
-                    saved_antecedents.append((str(stack()[-1]), stack()[-1]))
-                    interpreter().save(str(stack()[-1]), stack()[-1])
+                    if phase == 0:
+                        saved_antecedents.append((str(stack()[-1]), stack()[-1]))
+                        interpreter().save(str(stack()[-1]), stack()[-1])
                     interpreter().pop(stack()[-1])
-                proofexp.load_axiom(convert_to_implication(axiom.antecedents, axiom.pattern))
+
+                if phase == 0:
+                    proofexp.load_axiom(convert_to_implication(axiom.antecedents, axiom.pattern))
+                else:
+                    delta = get_delta(converter.get_metavars_in_order(lemma_label), 0)
+
+                    for _ in converter.get_metavars_in_order(lemma_label):
+                        interpreter().pop(stack()[-1])
+
+                    proofexp.load_axiom(
+                        axiom.pattern.instantiate(delta)
+                    )
+                    continue
             else:
                 proofexp.load_axiom(axiom.pattern)
 
+            pat2 = axiom.pattern.instantiate(get_delta(converter.get_metavars_in_order(lemma_label)))
             # We need to instantiate the axiom depending on what we are given on stack
             if len(axiom.metavars) > 0:
                 pat = stack()[-1]
@@ -129,6 +144,10 @@ def exec_proof(converter: MetamathConverter, target: str, proofexp: p.ProofExp) 
                     interpreter().load(eh, pat)  # stack[-1]: eh1
                     pass  # stack[-2]: eh1 -> (eh2 -> (...))
                     do_mp()  # stack[-1]: eh2 -> (...)
+                pat = stack()[-1]
+                assert isinstance(pat, p.Proved)
+                assert pat.conclusion == pat2
+                exported_conclusions.append(pat.conclusion)
 
         # Lemma is one of the fixed proof rules in the ML proof system
         elif lemma_label in converter.proof_rules:
@@ -175,6 +194,7 @@ def exec_proof(converter: MetamathConverter, target: str, proofexp: p.ProofExp) 
     assert isinstance(pat, p.Proved)
     assert pat == p.Proved(interpreter(), converter.get_lemma_by_name(target).pattern)
     interpreter().publish_proof(pat)
+    return exported_conclusions
 
 
 # TODO: This is unsound and should be replaced with a different handling
@@ -237,18 +257,41 @@ def main() -> None:
 
     module = os.path.splitext(os.path.basename(args.input))[0]
 
-    # Export axioms and claims
-    TranslatedProofSkeleton.main(['', 'binary', 'gamma', str(output_dir / f'{module}.ml-gamma')])
-    TranslatedProofSkeleton.main(['', 'binary', 'claim', str(output_dir / f'{module}.ml-claim')])
+    # Phase 0 : Collect EH's
+    proofexp = TranslatedProofSkeleton(
+        p.StatefulInterpreter(
+            p.ExecutionPhase.Proof, [p.Claim(claim) for claim in extracted_claims], extracted_axioms
+        )
+    )
+    extracted_axioms2 = exec_proof(converter, args.target, proofexp)
 
-    # Export proof
+    for axiom_name in converter.exported_axioms:
+        axiom = converter.get_axiom_by_name(axiom_name)
+        if isinstance(axiom, AxiomWithAntecedents):
+            continue
+        extracted_axioms2.append(axiom.pattern)
+
+    class TranslatedProofSkeleton2(p.ProofExp):
+        @staticmethod
+        def axioms() -> list[p.Pattern]:
+            return extracted_axioms2
+
+        @staticmethod
+        def claims() -> list[p.Pattern]:
+            return extracted_claims
+
+    # Export axioms and claims
+    TranslatedProofSkeleton2.main(['', 'binary', 'gamma', str(output_dir / f'{module}.ml-gamma')])
+    TranslatedProofSkeleton2.main(['', 'binary', 'claim', str(output_dir / f'{module}.ml-claim')])
+
+    # Phase 2:
     with open(output_dir / f'{module}.ml-proof', 'wb') as out:
-        proofexp = TranslatedProofSkeleton(
+        proofexp2 = TranslatedProofSkeleton2(
             p.SerializingInterpreter(
-                p.ExecutionPhase.Proof, out, [p.Claim(claim) for claim in extracted_claims], extracted_axioms
+                p.ExecutionPhase.Proof, out, [p.Claim(claim) for claim in extracted_claims], extracted_axioms2
             )
         )
-        exec_proof(converter, args.target, proofexp)
+        exec_proof(converter, args.target, proofexp2, 1)
 
 
 if __name__ == '__main__':
