@@ -159,9 +159,9 @@ class PrettyPrintingInterpreter(IOInterpreter):
         self.out.write('Save')
 
     @pretty()
-    def load(self, id: str, term: Pattern | Proved) -> None:
+    def load(self, _id: str, term: Pattern | Proved) -> None:
         self.out.write('Load ')
-        self.out.write(id)
+        self.out.write(self.memory[self.memory.index(term)].pretty(self.pretty_options))
         self.out.write('=')
         self.out.write(str(self.memory.index(term)))
 
@@ -180,7 +180,4 @@ class PrettyPrintingInterpreter(IOInterpreter):
     def print_stack(self) -> None:
         self.out.write('\tStack:\n')
         for i, item in enumerate(self.stack):
-            if isinstance(item, Proved):
-                self.out.write(f'\t{i}: ⊢ {item.conclusion.pretty(self.pretty_options)}\n')
-                continue
             self.out.write(f'\t{i}: {item.pretty(self.pretty_options)}\n')
