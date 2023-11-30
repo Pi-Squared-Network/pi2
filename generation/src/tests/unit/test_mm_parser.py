@@ -1,6 +1,6 @@
 import os
 
-from mm_translate.metamath.ast import (
+from proof_generation.metamath.ast import (
     AxiomaticStatement,
     Block,
     ConstantStatement,
@@ -8,9 +8,9 @@ from mm_translate.metamath.ast import (
     ProvableStatement,
     VariableStatement,
 )
-from mm_translate.metamath.parser import load_database
+from proof_generation.metamath.parser import load_database
 
-BENCHMARK_LOCATION = 'mm-benchmarks'
+BENCHMARK_LOCATION = 'generation/mm-benchmarks'
 
 
 def test_parse_impreflex() -> None:
