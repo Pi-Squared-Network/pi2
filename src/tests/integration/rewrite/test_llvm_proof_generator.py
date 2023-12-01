@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 HINTS_DIR = '.build/proof-hints'
-K_BENCHMARKS_DIR = 'generation/k-benchmarks'
+K_BENCHMARKS_DIR = 'k-benchmarks'
 KOMPILED_DIR = '.build/kompiled-definitions'
 
 

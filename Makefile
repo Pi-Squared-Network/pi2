@@ -32,8 +32,7 @@ update-snapshots:
 # =============
 
 build-poetry:
-	# See: https://github.com/python-poetry/poetry/issues/8699
-	(cd generation; poetry build)
+	$(POETRY) build
 
 poetry-install:
 	$(POETRY) install
